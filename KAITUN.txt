@@ -4,12 +4,11 @@ _G.KAITUN_LOADED = true
 getgenv().Config = {
     TEAM = "Pirates", 
     FpsBoost = true,
-    -- Tính năng mới thêm vào:
-    AutoGodhuman = true, -- Tự lấy Godhuman
-    AutoRaid = true,     -- Tự đi Raid khi thiếu Fragment
-    MinFragment = 5000,  -- Ngưỡng Frag để đi Raid
-    MasteryLimit = 400,  -- Cày Mastery lên mức này
-    FastAttackRaid = true -- Đánh nhanh trong Raid
+    -- Thêm các dòng này để kích hoạt tính năng mới
+    AutoGodhuman = true, 
+    AutoRaid = true,     
+    MinFragment = 5000,  
+    MasteryLimit = 400   
 }
 local Config = getgenv().Config
       do
@@ -4362,25 +4361,7 @@ local API = {}
 
 
 _G.KaitunUI = API
--- =========================================================
--- [PLUGIN] TÍCH HỢP AUTO GODHUMAN & RAID (DÁN VÀO ĐÂY)
--- =========================================================
-
-local MeleeShop = {
-    ["Superhuman"] = {Pos = Vector3.new(-1106, 331, -4432), Remote = "BuySuperhuman"},
-    ["Death Step"] = {Pos = Vector3.new(-5414, 15, -5303), Remote = "BuyDeathStep"},
-    ["Sharkman Karate"] = {Pos = Vector3.new(-1101, 15, -10503), Remote = "BuySharkmanKarate"},
-    ["Electric Claw"] = {Pos = Vector3.new(-5274, 15, -1286), Remote = "BuyElectricClaw"},
-    ["Dragon Talon"] = {Pos = Vector3.new(-3255, 300, -9725), Remote = "BuyDragonTalon"},
-    ["Godhuman"] = {Pos = Vector3.new(-2855, 239, -13346), Remote = "BuyGodhuman"}
-}
-
-function CheckOwned(name)
-    local inv = replicated.Remotes.CommF_:InvokeServer("getInventory")
-    for _, v in pairs(inv) do if v.Name == name then return true end end
-    return false
-end
-
+-- DÁN ĐOẠN NÀY VÀO ĐÂY (TRƯỚC KHI KẾT THÚC FILE)
 task.spawn(function()
     while task.wait(1) do
         pcall(function()
@@ -4388,32 +4369,19 @@ task.spawn(function()
             
             local myFrag = plr.Data.Fragments.Value
             local myBeli = plr.Data.Beli.Value
-            
-            -- 1. ƯU TIÊN ĐI RAID NẾU THIẾU FRAG (Sử dụng Fast Attack, No Skill)
-            if myFrag < getgenv().Config.MinFragment and getgenv().Config.AutoRaid then
-                _G.fykaitun = false -- Tắt farm level gốc của bạn
+            local myLevel = plr.Data.Level.Value
+
+            -- 1. ƯU TIÊN RAID NẾU THIẾU FRAG
+            if myLevel >= 1100 and myFrag < getgenv().Config.MinFragment and getgenv().Config.AutoRaid then
+                _G.fykaitun = false -- Tắt farm của script gốc
                 if workspace:FindFirstChild("SeaBeast") or workspace.Map:FindFirstChild("Island1") then
-                    -- Logic Fast Attack Raid
-                    local target = nil
-                    for _, v in pairs(workspace.Enemies:GetChildren()) do
-                        if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                            target = v break
-                        end
-                    end
-                    if target then
-                        weaponSc("Melee") -- Gọi hàm cầm vũ khí của bạn
-                        Root.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, 20, 0)
-                        -- Click cực nhanh (Fast Attack)
-                        game:GetService("VirtualUser"):CaptureController()
-                        game:GetService("VirtualUser"):Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                        target.HumanoidRootPart.CFrame = Root.CFrame * CFrame.new(0,0,-5)
-                    end
+                    weaponSc("Melee")
+                    game:GetService("VirtualUser"):CaptureController()
+                    game:GetService("VirtualUser"):Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
                 else
-                    -- Đi mua Chip & Vào Raid
                     local lab = (game.PlaceId == 7449423635) and Vector3.new(-5030, 315, -2820) or Vector3.new(-6411, 250, 4490)
-                    if (Root.Position - lab).Magnitude > 50 then
-                        _tp(CFrame.new(lab)) -- Dùng hàm teleport của bạn
-                    else
+                    _tp(CFrame.new(lab))
+                    if (Root.Position - lab).Magnitude < 20 then
                         replicated.Remotes.CommF_:InvokeServer("RaidsEntityInterface", "BuyChip", 2)
                         fireclickdetector(workspace.Scripts.Raid.Main.ClickDetector)
                     end
@@ -4421,21 +4389,27 @@ task.spawn(function()
                 return
             end
 
-            -- 2. KIỂM TRA MASTERY MELEE (Cày lên 400)
+            -- 2. CÀY MASTERY MELEE
             local curMelee = plr.Character:FindFirstChildOfClass("Tool") or plr.Backpack:FindFirstChildOfClass("Tool")
             if curMelee and curMelee.ToolTip == "Melee" and curMelee.Level.Value < getgenv().Config.MasteryLimit then
-                _G.fykaitun = true -- Bật lại farm level để script gốc của bạn đi đánh quái
+                _G.fykaitun = true -- Bật farm level gốc để đánh quái lấy Mastery
                 _G.SelectWeapon = curMelee.Name
                 return
             end
 
-            -- 3. ĐI MUA VÕ MỚI
-            for name, info in pairs(MeleeShop) do
-                if not CheckOwned(name) and myBeli >= 3000000 then
+            -- 3. TỰ ĐI MUA VÕ MỚI (Bằng tiền)
+            local MeleeList = {
+                ["Superhuman"] = {Pos = Vector3.new(-1106, 331, -4432), Rem = "BuySuperhuman"},
+                ["Godhuman"] = {Pos = Vector3.new(-2855, 239, -13346), Rem = "BuyGodhuman"}
+            }
+            for name, data in pairs(MeleeList) do
+                local has = false
+                for _,v in pairs(replicated.Remotes.CommF_:InvokeServer("getInventory")) do if v.Name == name then has = true end end
+                if not has and myBeli >= 3000000 then
                     _G.fykaitun = false
-                    _tp(CFrame.new(info.Pos))
-                    if (Root.Position - info.Pos).Magnitude < 20 then
-                        replicated.Remotes.CommF_:InvokeServer(info.Remote)
+                    _tp(CFrame.new(data.Pos))
+                    if (Root.Position - data.Pos).Magnitude < 20 then
+                        replicated.Remotes.CommF_:InvokeServer(data.Rem)
                     end
                     break
                 end
@@ -4444,4 +4418,4 @@ task.spawn(function()
     end
 end)
 
-	
+-- KHÔNG ĐƯỢC CÓ CHỮ "RETURN" Ở DƯỚI CÙNG NÀY
